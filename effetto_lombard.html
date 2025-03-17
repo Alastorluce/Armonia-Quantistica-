@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Effetto Lombard - Visualizzazione Interattiva HD</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial;
+            font-size: 12px;
+            z-index: 100;
+        }
+        #description {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial;
+            font-size: 14px;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 400px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    div id="info">FPS: <span id="fps">0</span> | Zoom: Scroll | Rotate: Drag</div>
+    <div id="description">
+        <strong>Effetto Lombard</strong>: Fenomeno psicoacustico in cui i parlanti aumentano il volume e modificano 
+        la pronuncia in ambienti rumorosi. <br>
+        • Lo sciame di particelle (voce) crea un avvallamento nel rumore di fondo<br>
+        • Le particelle si staccano dallo sciame e si posano sul rumore quando si avvicina<br>
+        • Le onde più alte e più scure rappresentano maggiore intensità del rumore<br>
+        • L'intensità dell'effetto è proporzionale alla vicinanza dello sciame di particelle al rumore
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/stats.min.js"></script>
+
+<script>
+// Parametri fissi
+const NUM_SFERE_SCIAME = 35;
+const MAX_SFERE_SUPERFICIE = NUM_SFERE_SCIAME * 3;
+const RAGGIO_SFERA = 4;
+const RAGGIO_AUREA = RAGGIO_SFERA * 3;
+const NUM_PARTICELLE = 800;
+const PULSE_RATIO = 0.65;
+
+// Parametri per la pulsazione
+const PULSE_MIN_DIST = 0.2;
+const PULSE_MAX_DIST = 1.8;
+
+// Parametri per lo sciame
+const RAGGIO_SCIAME = 100;
+const VELOCITA_SCIAME = 0.2;
+const VELOCITA_VERTICALE_SCIAME = 0.2;
+const VELOCITA_SFERE = 0.5;
+const AMPIEZZA_VERTICALE = 120; // Aggiungi questo nuovo parametro
+
+// Parametri per il rumore di fondo - valori equilibrati
+const GRID_SIZE = 500;
+const GRID_SEGMENTS = 60;
+const NOISE_BASE_AMPLITUDE = 40;
+const NOISE_EXTRA_AMPLITUDE = 30;
+const NOISE_FREQUENCY = 0.02;
+const NOISE_SPEED = 0.3;
+const WAVE_SPEED = 0.5;
+
+// Parametri per l'effetto Lombard - valori equilibrati
+const AVVALLAMENTO_RAGGIO = 180;
+const AVVALLAMENTO_PROFONDITA_BASE = 60;
+const AVVALLAMENTO_EXTRA_PROFONDITA = 40;
+const DISTANZA_ATTIVAZIONE = 250;
+const VELOCITA_SPEGNIMENTO = 0.03;
+const TEMPO_VITA_SFERA = 10;
+const DISTANZA_ATTRAZIONE_RITORNO = 80;
+const FORZA_ATTRAZIONE = 0.1;
+const PROBABILITA_CADUTA = 0.7;
+const DISTANZA_CADUTA_MIN = 200;
+const DISTANZA_CADUTA_MAX = 350;
+
+// Parametri per le onde di rumore - valori equilibrati
+const NUM_ONDE = 6;
+const RAGGIO_ONDA_MIN = 80;
+const RAGGIO_ONDA_MAX = 300;
+const ALTEZZA_ONDA_MIN = 0.4;
+const ALTEZZA_ONDA_MAX = 1.2;
+
+// Parametri per il framerate
+const TARGET_FPS = 120;
+
+// Parametri per la qualità grafica
+const USE_SHADOWS = true;
+const SHADOW_MAP_SIZE = 1024;
+
+// Inizializzazione scena
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000); // Nero
+
+// Aggiunta di nebbia per profondità
+scene.fog = new THREE.FogExp2(0x000000, 0.0008);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
+const renderer = new THREE.WebGLRenderer({ 
+    antialias: true,
+    alpha: true
+});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+
+// Abilita le ombre
+if (USE_SHADOWS) {
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+}
+
+document.body.appendChild(renderer.domElement);
+
+// Controlli camera
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+
+// Illuminazione
+// Luce direzionale principale con ombre
+const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+mainLight.position.set(100, 200, 100);
+mainLight.castShadow = USE_SHADOWS;
+mainLight.shadow.mapSize.width = SHADOW_MAP_SIZE;
+mainLight.shadow.mapSize.height = SHADOW_MAP_SIZE;
+mainLight.shadow.camera.near = 0.5;
+mainLight.shadow.camera.far = 500;
+mainLight.shadow.camera.left = -200;
+mainLight.shadow.camera.right = 200;
+mainLight.shadow.camera.top = 200;
+mainLight.shadow.camera.bottom = -200;
+mainLight.shadow.bias = -0.0005;
+scene.add(mainLight);
+
+// Luce direzionale secondaria per riempire le ombre
+const fillLight = new THREE.DirectionalLight(0x5050ff, 0.5);
+fillLight.position.set(-100, 100, -100);
+scene.add(fillLight);
+
+// Luce ambientale per illuminazione di base (ridotta)
+const ambientLight = new THREE.AmbientLight(0x202020, 0.2);
+
+scene.add(ambientLight);
+
+// Luce emisferica per illuminazione naturale
+const hemiLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 0.5);
+scene.add(hemiLight);
+
+// Luce spot per evidenziare l'avvallamento
+const spotLight = new THREE.SpotLight(0x7040A0, 1.2);
+spotLight.position.set(0, 100, 0);
+spotLight.angle = Math.PI / 4;
+spotLight.penumbra = 0.2;
+spotLight.decay = 1.5;
+spotLight.distance = 10;
+spotLight.castShadow = USE_SHADOWS;
+spotLight.shadow.mapSize.width = SHADOW_MAP_SIZE / 2;
+spotLight.shadow.mapSize.height = SHADOW_MAP_SIZE / 2;
+spotLight.shadow.camera.near = 10;
+spotLight.shadow.camera.far = 500;
+spotLight.shadow.bias = -0.0005;
+scene.add(spotLight);
+scene.add(spotLight.target);
+
+// Classe per gestire le onde di rumore che si muovono
+class NoiseWave {
+    constructor() {
+        this.position = new THREE.Vector2(
+            (Math.random() - 0.5) * GRID_SIZE * 1.8,
+            (Math.random() - 0.5) * GRID_SIZE * 1.8
+        );
+        this.radius = RAGGIO_ONDA_MIN + Math.random() * (RAGGIO_ONDA_MAX - RAGGIO_ONDA_MIN);
+        this.height = ALTEZZA_ONDA_MIN + Math.random() * (ALTEZZA_ONDA_MAX - ALTEZZA_ONDA_MIN);
+        this.speed = 0.5 + Math.random() * 0.5;
+        this.phase = Math.random() * Math.PI * 2;
+    }
+    
+    update(time, targetPosition) {
+        // Muovi l'onda verso la posizione target (sciame)
+        const direction = new THREE.Vector2(
+            targetPosition.x - this.position.x,
+            targetPosition.z - this.position.y
+        ).normalize();
+        
+        this.position.x += direction.x * this.speed * WAVE_SPEED;
+        this.position.y += direction.y * this.speed * WAVE_SPEED;
+        
+        // Se l'onda è troppo vicina al target, resettala in una posizione lontana
+        const distanceToTarget = Math.sqrt(
+            Math.pow(this.position.x - targetPosition.x, 2) +
+            Math.pow(this.position.y - targetPosition.z, 2)
+        );
+        
+        if (distanceToTarget < 20) {
+            // Resetta l'onda in una posizione lontana
+            const angle = Math.random() * Math.PI * 2;
+            const distance = GRID_SIZE * 0.9;
+            this.position.x = targetPosition.x + Math.cos(angle) * distance;
+            this.position.y = targetPosition.z + Math.sin(angle) * distance;
+            this.radius = RAGGIO_ONDA_MIN + Math.random() * (RAGGIO_ONDA_MAX - RAGGIO_ONDA_MIN);
+            this.height = ALTEZZA_ONDA_MIN + Math.random() * (ALTEZZA_ONDA_MAX - ALTEZZA_ONDA_MIN);
+        }
+    }
+    
+    // Calcola l'influenza dell'onda su un punto specifico
+    getInfluence(x, z) {
+        const distance = Math.sqrt(
+            Math.pow(x - this.position.x, 2) +
+            Math.pow(z - this.position.y, 2)
+        );
+        
+        if (distance > this.radius) {
+            return 0; // Fuori dal raggio dell'onda
+        }
+        
+        // Calcola l'influenza in base alla distanza (più forte al centro, più debole ai bordi)
+        const normalizedDist = distance / this.radius;
+        return this.height * (1 - normalizedDist * normalizedDist);
+    }
+}
+
+// Classe per gestire il rumore di fondo sinusoidale con effetto Lombard
+class NoiseSurface {
+    constructor() {
+        // Crea la geometria della griglia
+        this.geometry = new THREE.PlaneGeometry(GRID_SIZE * 2, GRID_SIZE * 2, GRID_SEGMENTS, GRID_SEGMENTS);
+        
+        // Posiziona la griglia sotto lo sciame
+        this.geometry.rotateX(-Math.PI / 2);
+        this.geometry.translate(0, -RAGGIO_SCIAME, 0);
+        
+        // Crea il materiale completamente opaco
+        this.material = new THREE.MeshLambertMaterial({
+         color: 0x505050,  // Grigio medio
+         side: THREE.DoubleSide,
+         wireframe: false,
+         vertexColors: true,
+         flatShading: true  // Ombreggiatura piatta per un aspetto più opaco
+});
+
+        
+        // Crea la mesh
+        this.mesh = new THREE.Mesh(this.geometry, this.material);
+        this.mesh.receiveShadow = USE_SHADOWS;
+        scene.add(this.mesh);
+        
+        // Memorizza le posizioni originali dei vertici
+        this.originalPositions = [];
+        const positions = this.geometry.attributes.position.array;
+        for (let i = 0; i < positions.length; i += 3) {
+            this.originalPositions.push({
+                x: positions[i],
+                y: positions[i + 1],
+                z: positions[i + 2]
+            });
+        }
+        
+        // Crea un array di colori per i vertici
+        const colors = new Float32Array(positions.length);
+        this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        
+        // Precalcola alcuni valori per ottimizzare
+        this.lastUpdateTime = 0;
+        this.updateInterval = 0.05;
+        
+        // Crea le sfere sulla superficie
+        this.sfereSurface = [];
+        
+        // Crea le onde di rumore
+        this.waves = [];
+        for (let i = 0; i < NUM_ONDE; i++) {
+            this.waves.push(new NoiseWave());
+        }
+    }
+    
+    // Aggiunge una nuova sfera alla superficie
+    addSfera(position, velocita, color) {
+        if (this.sfereSurface.length >= MAX_SFERE_SUPERFICIE) {
+            return null; // Limite massimo raggiunto
+        }
+        
+        // Geometria per la sfera
+        const geometrySfera = new THREE.SphereGeometry(RAGGIO_SFERA * 0.8, 24, 24);
+        
+        // Crea un materiale con il colore fornito
+        const material = new THREE.MeshPhongMaterial({
+            color: color,
+            emissive: color.clone().multiplyScalar(0.5),
+            emissiveIntensity: 0.1,
+            shininess: 100
+        });
+        
+        const sfera = new THREE.Mesh(geometrySfera, material);
+        sfera.castShadow = USE_SHADOWS;
+        sfera.receiveShadow = USE_SHADOWS;
+        
+        // Posiziona la sfera alla posizione iniziale
+        sfera.position.copy(position);
+        
+        // Aggiungi un sistema di particelle per la sfera
+        const particleSystem = new ParticleSystem(sfera.position, this.sfereSurface.length + 1000);
+        
+        // Aggiungi alla scena e all'array
+        scene.add(sfera);
+        
+        const nuovaSfera = {
+            mesh: sfera,
+            particleSystem: particleSystem,
+            active: true,
+            activationLevel: 1.0,
+            baseColor: color,
+            velocity: velocita.clone(),
+            inTransit: true, // La sfera è in transito (cadendo)
+            creationTime: Date.now() / 1000, // Tempo di creazione in secondi
+            lastActiveTime: Date.now() / 1000, // Ultimo momento in cui era attiva
+            originalColor: color.clone(),
+            // Parametri per il movimento fluido
+            oscillation: {
+                x: Math.random() * Math.PI * 2,
+                y: Math.random() * Math.PI * 2,
+                z: Math.random() * Math.PI * 2,
+                speed: 0.5 + Math.random() * 1.0,
+                amplitude: 0.05 + Math.random() * 0.1
+            },
+            // Parametri per l'interpolazione
+            startPosition: position.clone(),
+            targetPosition: position.clone(),
+            interpolationFactor: 0,
+            interpolationSpeed: 0.02 + Math.random() * 0.03
+        };
+        
+        this.sfereSurface.push(nuovaSfera);
+        return nuovaSfera;
+    }
+    
+    update(time, sciamaPosition) {
+        // Aggiorna le onde di rumore
+        this.waves.forEach(wave => {
+            wave.update(time, sciamaPosition);
+        });
+        
+        // Aggiorna la superficie solo a intervalli regolari
+        if (time - this.lastUpdateTime < this.updateInterval) {
+            // Aggiorna comunque le sfere sulla superficie
+            this.updateSfereSurface(time, sciamaPosition);
+            return;
+        }
+        
+        this.lastUpdateTime = time;
+        
+        // Calcola la distanza orizzontale tra lo sciame e ogni punto della superficie
+        const positions = this.geometry.attributes.position.array;
+        const colors = this.geometry.attributes.color.array;
+        
+        for (let i = 0, j = 0; i < positions.length; i += 3, j++) {
+            const orig = this.originalPositions[j];
+            
+            // Calcola il valore del rumore base
+            const noiseValue = this.perlinNoise(
+                orig.x * NOISE_FREQUENCY, 
+                orig.z * NOISE_FREQUENCY, 
+                time * NOISE_SPEED
+            );
+            
+            // Calcola l'influenza delle onde di rumore
+            let waveInfluence = 0;
+            let maxInfluence = 0;
+            
+            this.waves.forEach(wave => {
+                const influence = wave.getInfluence(orig.x, orig.z);
+                waveInfluence += influence;
+                maxInfluence = Math.max(maxInfluence, influence);
+            });
+            
+            // Calcola la distanza orizzontale dal centro dello sciame
+            const dx = orig.x - sciamaPosition.x;
+            const dz = orig.z - sciamaPosition.z;
+            const distanceHorizontal = Math.sqrt(dx * dx + dz * dz);
+            
+            // Calcola l'effetto di avvallamento basato sulla distanza e sull'influenza delle onde
+            let avvallamento = 0;
+            let isInAvvallamento = false;
+            
+            if (distanceHorizontal < AVVALLAMENTO_RAGGIO) {
+                // Formula per un avvallamento morbido che si attenua ai bordi
+                const normalizedDist = distanceHorizontal / AVVALLAMENTO_RAGGIO;
+                // Profondità base + extra in base all'influenza delle onde
+                const profondita = AVVALLAMENTO_PROFONDITA_BASE + AVVALLAMENTO_EXTRA_PROFONDITA * maxInfluence;
+                avvallamento = profondita * (1 - normalizedDist * normalizedDist);
+                isInAvvallamento = true;
+            }
+            
+            // Applica il rumore, l'influenza delle onde e l'avvallamento all'asse Y (altezza)
+            const baseAmplitude = NOISE_BASE_AMPLITUDE + NOISE_EXTRA_AMPLITUDE * waveInfluence;
+            positions[i + 1] = orig.y + noiseValue * baseAmplitude - avvallamento;
+            
+            // Aggiorna il colore in base all'altezza dell'onda e se è nell'avvallamento
+            if (isInAvvallamento) {
+                // Parte avvallata più chiara
+                const avvallamentoColor = new THREE.Color(0x7A7AAA); // Colore più chiaro per l'avvallamento
+                colors[i] = avvallamentoColor.r;
+                colors[i+1] = avvallamentoColor.g;
+                colors[i+2] = avvallamentoColor.b;
+            } else {
+                // Resto della superficie
+                const baseColor = new THREE.Color(0x505050);
+                const darkColor = new THREE.Color(0x303030);
+                
+                // Interpola tra il colore base e il colore scuro in base all'influenza delle onde
+                const color = baseColor.clone().lerp(darkColor, maxInfluence);
+                
+                colors[i] = color.r;
+                colors[i+1] = color.g;
+                colors[i+2] = color.b;
+            }
+        }
+        
+        // Aggiorna la geometria
+        this.geometry.attributes.position.needsUpdate = true;
+        this.geometry.attributes.color.needsUpdate = true;
+        this.geometry.computeVertexNormals();
+        
+        // Aggiorna le sfere sulla superficie
+        this.updateSfereSurface(time, sciamaPosition);
+    }
+    
+    updateSfereSurface(time, sciamaPosition) {
+        const currentTime = Date.now() / 1000;
+        
+        // Aggiorna la posizione e l'attivazione delle sfere sulla superficie
+        for (let i = this.sfereSurface.length - 1; i >= 0; i--) {
+            const sfera = this.sfereSurface[i];
+            const mesh = sfera.mesh;
+            
+            // Calcola la distanza orizzontale dallo sciame
+            const dx = mesh.position.x - sciamaPosition.x;
+            const dy = mesh.position.y - sciamaPosition.y;
+            const dz = mesh.position.z - sciamaPosition.z;
+            const distanceToSciame = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            
+            // Se la sfera è in transito (cadendo), aggiorna la sua posizione
+            if (sfera.inTransit) {
+                // Applica gravità con smorzamento per movimento più fluido
+                sfera.velocity.y -= 0.03;
+                sfera.velocity.multiplyScalar(0.98);
+                
+                // Calcola la nuova posizione target
+                sfera.targetPosition.add(sfera.velocity);
+                
+                // Aggiungi oscillazione per movimento più naturale
+                const oscillation = sfera.oscillation;
+                const oscillationX = Math.sin(time * oscillation.speed + oscillation.x) * oscillation.amplitude;
+                const oscillationZ = Math.cos(time * oscillation.speed + oscillation.z) * oscillation.amplitude;
+                
+                sfera.targetPosition.x += oscillationX;
+                sfera.targetPosition.z += oscillationZ;
+                
+                // Interpola tra la posizione attuale e la posizione target
+                sfera.interpolationFactor += sfera.interpolationSpeed;
+                if (sfera.interpolationFactor > 1) sfera.interpolationFactor = 1;
+                
+                mesh.position.lerp(sfera.targetPosition, sfera.interpolationFactor);
+                
+                // Calcola l'altezza della superficie alla posizione della sfera
+                const noiseValue = this.perlinNoise(
+                    mesh.position.x * NOISE_FREQUENCY, 
+                    mesh.position.z * NOISE_FREQUENCY, 
+                    time * NOISE_SPEED
+                );
+                
+                // Calcola l'influenza delle onde
+                let waveInfluence = 0;
+                let maxInfluence = 0;
+                
+                this.waves.forEach(wave => {
+                    const influence = wave.getInfluence(mesh.position.x, mesh.position.z);
+                    waveInfluence += influence;
+                    maxInfluence = Math.max(maxInfluence, influence);
+                });
+                
+                // Calcola l'effetto di avvallamento
+                let avvallamento = 0;
+                if (distanceToSciame < AVVALLAMENTO_RAGGIO) {
+                    const normalizedDist = distanceToSciame / AVVALLAMENTO_RAGGIO;
+                    const profondita = AVVALLAMENTO_PROFONDITA_BASE + AVVALLAMENTO_EXTRA_PROFONDITA * maxInfluence;
+                    avvallamento = profondita * (1 - normalizedDist * normalizedDist);
+                }
+                
+                // Altezza della superficie alla posizione della sfera
+                const baseAmplitude = NOISE_BASE_AMPLITUDE + NOISE_EXTRA_AMPLITUDE * waveInfluence;
+                const surfaceHeight = -RAGGIO_SCIAME + noiseValue * baseAmplitude - avvallamento;
+                
+                // Se la sfera ha raggiunto o superato la superficie, ferma la caduta
+                if (mesh.position.y <= surfaceHeight + RAGGIO_SFERA * 0.8) {
+                    mesh.position.y = surfaceHeight + RAGGIO_SFERA * 0.8;
+                    sfera.inTransit = false;
+                    sfera.velocity.set(0, 0, 0);
+                    sfera.interpolationFactor = 0;
+                    sfera.startPosition.copy(mesh.position);
+                    sfera.targetPosition.copy(mesh.position);
+                }
+            } 
+            else {
+                // La sfera è sulla superficie, aggiorna la sua posizione per seguire la superficie
+                
+                // Determina se la sfera deve essere attratta di nuovo verso lo sciame
+                if (distanceToSciame < DISTANZA_ATTRAZIONE_RITORNO) {
+                    // Calcola la direzione verso lo sciame
+                    const dirToSciame = new THREE.Vector3(
+                        sciamaPosition.x - mesh.position.x,
+                        sciamaPosition.y - mesh.position.y,
+                        sciamaPosition.z - mesh.position.z
+                    ).normalize();
+                    
+                    // Applica una forza di attrazione verso lo sciame
+                    sfera.velocity.add(dirToSciame.multiplyScalar(FORZA_ATTRAZIONE));
+                    
+                    // Se la sfera è abbastanza vicina allo sciame, rimuovila
+                    if (distanceToSciame < RAGGIO_SCIAME) {
+                        // Rimuovi la sfera e il suo sistema di particelle
+                        scene.remove(mesh);
+                        scene.remove(sfera.particleSystem.mesh);
+                        this.sfereSurface.splice(i, 1);
+                        continue;
+                    }
+                    
+                    // La sfera è in movimento verso lo sciame
+                    sfera.inTransit = true;
+                    sfera.interpolationFactor = 0;
+                    sfera.startPosition.copy(mesh.position);
+                    sfera.targetPosition.copy(mesh.position).add(sfera.velocity);
+                } 
+                else {
+                    // La sfera rimane sulla superficie
+                    
+                    // Calcola l'altezza della superficie alla posizione della sfera
+                    const noiseValue = this.perlinNoise(
+                        mesh.position.x * NOISE_FREQUENCY, 
+                        mesh.position.z * NOISE_FREQUENCY, 
+                        time * NOISE_SPEED
+                    );
+                    
+                    // Calcola l'influenza delle onde
+                    let waveInfluence = 0;
+                    let maxInfluence = 0;
+                    
+                    this.waves.forEach(wave => {
+                        const influence = wave.getInfluence(mesh.position.x, mesh.position.z);
+                        waveInfluence += influence;
+                        maxInfluence = Math.max(maxInfluence, influence);
+                    });
+                    
+                    // Calcola l'effetto di avvallamento
+                    let avvallamento = 0;
+                    if (distanceToSciame < AVVALLAMENTO_RAGGIO) {
+                        const normalizedDist = distanceToSciame / AVVALLAMENTO_RAGGIO;
+                        const profondita = AVVALLAMENTO_PROFONDITA_BASE + AVVALLAMENTO_EXTRA_PROFONDITA * maxInfluence;
+                        avvallamento = profondita * (1 - normalizedDist * normalizedDist);
+                    }
+                    
+                    // Aggiorna la posizione Y della sfera per seguire la superficie
+                    const baseAmplitude = NOISE_BASE_AMPLITUDE + NOISE_EXTRA_AMPLITUDE * waveInfluence;
+                    const targetY = -RAGGIO_SCIAME + noiseValue * baseAmplitude - avvallamento + RAGGIO_SFERA * 0.8;
+                    
+                    // Interpola la posizione Y per un movimento più fluido
+                    mesh.position.y += (targetY - mesh.position.y) * 0.1;
+                }
+            }
+            
+            // Determina se la sfera deve essere attiva in base alla distanza
+            const shouldBeActive = distanceToSciame < DISTANZA_ATTIVAZIONE;
+            
+            // Aggiorna gradualmente il livello di attivazione
+            if (shouldBeActive && sfera.activationLevel < 1.0) {
+                sfera.activationLevel += VELOCITA_SPEGNIMENTO * 2;
+                if (sfera.activationLevel > 1.0) sfera.activationLevel = 1.0;
+                sfera.active = true;
+                sfera.lastActiveTime = currentTime;
+            } else if (!shouldBeActive && sfera.activationLevel > 0) {
+                sfera.activationLevel -= VELOCITA_SPEGNIMENTO;
+                if (sfera.activationLevel <= 0) {
+                    sfera.activationLevel = 0;
+                    sfera.active = false;
+                }
+            }
+            
+            // Se la sfera è inattiva da troppo tempo, rimuovila
+            if (!sfera.active && currentTime - sfera.lastActiveTime > TEMPO_VITA_SFERA) {
+                scene.remove(mesh);
+                scene.remove(sfera.particleSystem.mesh);
+                this.sfereSurface.splice(i, 1);
+                continue;
+            }
+            
+            // Aggiorna il colore e l'emissività in base all'attivazione
+            const baseColor = sfera.baseColor;
+            const material = mesh.material;
+            
+            // Aumenta la luminosità e l'emissività in base al livello di attivazione
+            const activatedLightness = 0.4 + 0.4 * sfera.activationLevel;
+            const emissiveIntensity = 0.1 + 1.9 * sfera.activationLevel;
+            
+            material.color.copy(baseColor).multiplyScalar(activatedLightness);
+            material.emissive.copy(baseColor).multiplyScalar(0.5);
+            material.emissiveIntensity = emissiveIntensity;
+            
+            // Aggiorna il sistema di particelle
+            if (sfera.active) {
+                sfera.particleSystem.update(time, mesh.position);
+                sfera.particleSystem.setVisibility(true);
+                sfera.particleSystem.setIntensity(sfera.activationLevel);
+            } else {
+                sfera.particleSystem.setVisibility(false);
+            }
+        }
+    }
+    
+    // Implementazione semplificata del rumore di Perlin
+    perlinNoise(x, y, z) {
+        const noise = Math.sin(x + z) * Math.cos(y + z * 0.7) * 0.5 +
+                      Math.sin(x * 1.3 + z * 0.8) * Math.cos(y * 0.9 + z * 0.6) * 0.3;
+        return noise;
+    }
+    
+    // Calcola l'altezza della superficie a una data posizione x,z
+    getSurfaceHeight(x, z, time, sciamaPosition) {
+        // Calcola il valore del rumore base
+        const noiseValue = this.perlinNoise(
+            x * NOISE_FREQUENCY, 
+            z * NOISE_FREQUENCY, 
+            time * NOISE_SPEED
+        );
+        
+        // Calcola l'influenza delle onde
+        let waveInfluence = 0;
+        let maxInfluence = 0;
+        
+        this.waves.forEach(wave => {
+            const influence = wave.getInfluence(x, z);
+            waveInfluence += influence;
+            maxInfluence = Math.max(maxInfluence, influence);
+        });
+        
+        // Calcola la distanza orizzontale dal centro dello sciame
+        const dx = x - sciamaPosition.x;
+        const dz = z - sciamaPosition.z;
+        const distanceHorizontal = Math.sqrt(dx * dx + dz * dz);
+        
+        // Calcola l'effetto di avvallamento basato sulla distanza
+        let avvallamento = 0;
+        if (distanceHorizontal < AVVALLAMENTO_RAGGIO) {
+            // Formula per un avvallamento morbido che si attenua ai bordi
+            const normalizedDist = distanceHorizontal / AVVALLAMENTO_RAGGIO;
+            const profondita = AVVALLAMENTO_PROFONDITA_BASE + AVVALLAMENTO_EXTRA_PROFONDITA * maxInfluence;
+            avvallamento = profondita * (1 - normalizedDist * normalizedDist);
+        }
+        
+        // Calcola l'altezza della superficie
+        const baseAmplitude = NOISE_BASE_AMPLITUDE + NOISE_EXTRA_AMPLITUDE * waveInfluence;
+        return -RAGGIO_SCIAME + noiseValue * baseAmplitude - avvallamento;
+    }
+    
+    // Calcola l'influenza delle onde a una data posizione x,z
+    getWaveInfluence(x, z) {
+        let maxInfluence = 0;
+        
+        this.waves.forEach(wave => {
+            const influence = wave.getInfluence(x, z);
+            maxInfluence = Math.max(maxInfluence, influence);
+        });
+        
+        return maxInfluence;
+    }
+}
+
+// Classe per gestire lo sciame come entità unica
+class Sciame {
+    constructor() {
+        // Posizione centrale dello sciame
+        this.position = new THREE.Vector3(0, 50, 0);
+        
+        // Velocità e direzione dello sciame
+        this.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * VELOCITA_SCIAME,
+            (Math.random() - 0.5) * VELOCITA_VERTICALE_SCIAME,
+            (Math.random() - 0.5) * VELOCITA_SCIAME
+        );
+        
+        // Sfere contenute nello sciame
+        this.sfere = [];
+        
+        // Inizializza le sfere
+        for(let i = 0; i < NUM_SFERE_SCIAME; i++) {
+            this.sfere.push(new SferaDinamica(this));
+        }
+        
+        // Tempo dell'ultimo controllo per la caduta delle sfere
+        this.lastDropCheck = 0;
+    }
+    
+    update(time, noiseSurface) {
+        // Movimento dello sciame come entità unica - più dinamico
+        this.position.x += Math.sin(time * 0.3) * VELOCITA_SCIAME + this.velocity.x;
+        this.position.y += Math.cos(time * 0.3) * AMPIEZZA_VERTICALE * 0.01 + this.velocity.y
+        this.position.z += Math.sin(time * 0.5) * VELOCITA_SCIAME + this.velocity.z;
+        
+        // E modifica i limiti verticali:
+if (this.position.y < RAGGIO_SCIAME) {
+    this.position.y = RAGGIO_SCIAME;
+    this.velocity.y = Math.abs(this.velocity.y) * 0.4; // Aumenta rimbalzo
+} else if (this.position.y > 250) { // Aumenta altezza massima da 150 a 250
+    this.position.y = 250;
+    this.velocity.y = -Math.abs(this.velocity.y) * 0.5;
+}
+        
+        // Limita il movimento orizzontale per mantenere lo sciame nell'area della superficie
+        const maxHorizontal = GRID_SIZE * 0.8;
+        if (Math.abs(this.position.x) > maxHorizontal) {
+            this.position.x = Math.sign(this.position.x) * maxHorizontal;
+            this.velocity.x = -this.velocity.x;
+        }
+        if (Math.abs(this.position.z) > maxHorizontal) {
+            this.position.z = Math.sign(this.position.z) * maxHorizontal;
+            this.velocity.z = -this.velocity.z;
+        }
+        
+        // Calcola la distanza verticale dalla superficie
+        const surfaceHeight = noiseSurface.getSurfaceHeight(this.position.x, this.position.z, time, this.position);
+        const distanceToSurface = this.position.y - surfaceHeight;
+        
+        // Ottieni l'influenza delle onde alla posizione dello sciame
+        const waveInfluence = noiseSurface.getWaveInfluence(this.position.x, this.position.z);
+        
+        // Controlla se è il momento di far cadere alcune sfere
+        if (time - this.lastDropCheck > 0.5 && distanceToSurface < DISTANZA_CADUTA_MAX) {
+            this.lastDropCheck = time;
+            
+            // Calcola quante sfere far cadere in base alla distanza e all'influenza delle onde
+            const distanceFactor = 1 - Math.max(0, Math.min(1, (distanceToSurface - DISTANZA_CADUTA_MIN) / (DISTANZA_CADUTA_MAX - DISTANZA_CADUTA_MIN)));
+            // Più alte sono le onde, più sfere cadono
+            const waveFactor = 1 + waveInfluence * 2;
+            const maxDropCount = Math.floor(this.sfere.length * distanceFactor * 0.25 * waveFactor);
+            
+            // Conta quante sfere far cadere
+            let dropCount = 0;
+            for (let i = 0; i < maxDropCount; i++) {
+                if (Math.random() < PROBABILITA_CADUTA) {
+                    dropCount++;
+                }
+            }
+            
+            // Fai cadere le sfere
+            for (let i = 0; i < dropCount && this.sfere.length > NUM_SFERE_SCIAME / 3; i++) {
+                // Scegli una sfera casuale
+                const index = Math.floor(Math.random() * this.sfere.length);
+                const sfera = this.sfere[index];
+                
+                // Crea una nuova sfera sulla superficie
+                const newPosition = sfera.mesh.position.clone();
+                const newVelocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.3,
+                    -0.5 - Math.random() * 1.0,
+                    (Math.random() - 0.5) * 0.3
+                );
+                
+                // Aggiungi la sfera alla superficie
+                noiseSurface.addSfera(newPosition, newVelocity, sfera.mesh.material.color.clone());
+                
+                // Rimuovi la sfera dallo sciame
+                scene.remove(sfera.mesh);
+                scene.remove(sfera.particleSystem.mesh);
+                this.sfere.splice(index, 1);
+            }
+        }
+        
+        // Aggiorna tutte le sfere all'interno dello sciame
+        this.sfere.forEach(sfera => sfera.update(time));
+        
+        // Aggiorna la posizione della luce spot per seguire lo sciame
+        spotLight.position.set(this.position.x, 100, this.position.z);
+        spotLight.target.position.set(this.position.x, 0, this.position.z);
+        spotLight.target.updateMatrixWorld();
+    }
+    
+    // Aggiunge una nuova sfera allo sciame
+    addSfera() {
+        if (this.sfere.length < NUM_SFERE_SCIAME) {
+            const nuovaSfera = new SferaDinamica(this);
+            this.sfere.push(nuovaSfera);
+            return nuovaSfera;
+        }
+        return null;
+    }
+}
+
+// Materiale condiviso per le particelle
+const particleMaterial = new THREE.PointsMaterial({
+    size: 0.1,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.6,
+    sizeAttenuation: true,
+    blending: THREE.AdditiveBlending
+});
+
+class ParticleSystem {
+    constructor(center, sferaId) {
+        this.center = center.clone();
+        this.particles = [];
+        this.sferaId = sferaId;
+        this.pulseSpeed = 0.4 + Math.random() * 0.6;
+        this.intensity = 1.0;
+        
+        this.initGeometry();
+    }
+
+    initGeometry() {
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(NUM_PARTICELLE * 3);
+        const colors = new Float32Array(NUM_PARTICELLE * 3);
+        const sizes = new Float32Array(NUM_PARTICELLE);
+        const types = new Float32Array(NUM_PARTICELLE);
+
+        for(let i = 0; i < NUM_PARTICELLE; i++) {
+            const isPulsante = Math.random() < PULSE_RATIO;
+            const dir = new THREE.Vector3(
+                Math.random() - 0.5,
+                Math.random() - 0.5,
+                Math.random() - 0.5
+            ).normalize();
+            
+            const baseDist = isPulsante 
+                ? RAGGIO_AUREA * (1.0 + Math.random() * 0.8)
+                : RAGGIO_AUREA * (0.7 + Math.random() * 0.6);
+            
+            positions[i*3] = this.center.x + dir.x * baseDist;
+            positions[i*3+1] = this.center.y + dir.y * baseDist;
+            positions[i*3+2] = this.center.z + dir.z * baseDist;
+
+            types[i] = isPulsante ? 0 : 1;
+            
+            // Colori più brillanti per le particelle pulsanti
+            if (isPulsante) {
+                colors[i*3] = 0x8A / 0xFF;
+                colors[i*3+1] = 0x20 / 0xFF;
+                colors[i*3+2] = 0xD4 / 0xFF;
+                sizes[i] = 0.6;
+            } else {
+                colors[i*3] = 0x6A / 0xFF;
+                colors[i*3+1] = 0x00 / 0xFF;
+                colors[i*3+2] = 0xA4 / 0xFF;
+                sizes[i] = 0.3;
+            }
+
+            this.particles.push({
+                dir: dir,
+                baseDist: baseDist,
+                velocity: new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.1,
+                    (Math.random() - 0.5) * 0.1,
+                    (Math.random() - 0.5) * 0.1
+                ),
+                type: types[i],
+                phase: Math.random() * Math.PI * 2,
+                noiseSeed: Math.random() * 1000,
+                size: sizes[i]
+            });
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+        geometry.setAttribute('type', new THREE.BufferAttribute(types, 1));
+
+        this.mesh = new THREE.Points(geometry, particleMaterial);
+        scene.add(this.mesh);
+    }
+    
+    setVisibility(visible) {
+        this.mesh.visible = visible;
+    }
+    
+    setIntensity(intensity) {
+        this.intensity = intensity;
+        
+        // Aggiorna l'opacità del materiale
+        const sizes = this.mesh.geometry.attributes.size.array;
+        
+        for(let i = 0; i < NUM_PARTICELLE; i++) {
+            const p = this.particles[i];
+            
+            // Scala le dimensioni in base all'intensità
+            sizes[i] = p.size * this.intensity;
+        }
+        
+        this.mesh.geometry.attributes.size.needsUpdate = true;
+    }
+
+    update(time, currentCenter) {
+        const positions = this.mesh.geometry.attributes.position.array;
+        const sizes = this.mesh.geometry.attributes.size.array;
+        
+        for(let i = 0; i < NUM_PARTICELLE; i++) {
+            const p = this.particles[i];
+            const idx = i * 3;
+            
+            if(p.type === 0) { 
+                const pulse = Math.sin(time * this.pulseSpeed + p.phase);
+                const pulseFactor = (pulse * 0.5 + 0.5);
+                const currentDistRatio = PULSE_MIN_DIST + pulseFactor * (PULSE_MAX_DIST - PULSE_MIN_DIST);
+                const currentDist = p.baseDist * currentDistRatio;
+                
+                positions[idx] = currentCenter.x + p.dir.x * currentDist;
+                positions[idx+1] = currentCenter.y + p.dir.y * currentDist;
+                positions[idx+2] = currentCenter.z + p.dir.z * currentDist;
+                
+                sizes[i] = p.size * (1.2 - pulseFactor * 0.4) * this.intensity;
+            } 
+            else { 
+                const offsetX = positions[idx] - this.center.x;
+                const offsetY = positions[idx+1] - this.center.y;
+                const offsetZ = positions[idx+2] - this.center.z;
+                
+                p.velocity.x += Math.sin(time * 0.7 + p.noiseSeed) * 0.003;
+                p.velocity.y += Math.cos(time * 0.9 + p.noiseSeed) * 0.003;
+                p.velocity.z += Math.sin(time * 1.1 + p.noiseSeed) * 0.003;
+                
+                p.velocity.multiplyScalar(0.98);
+                
+                positions[idx] = currentCenter.x + offsetX + p.velocity.x;
+                positions[idx+1] = currentCenter.y + offsetY + p.velocity.y;
+                positions[idx+2] = currentCenter.z + offsetZ + p.velocity.z;
+            }
+        }
+        
+        this.mesh.geometry.attributes.position.needsUpdate = true;
+        this.mesh.geometry.attributes.size.needsUpdate = true;
+        this.center.copy(currentCenter);
+    }
+}
+
+// Geometria condivisa per le sfere
+const sferaGeometry = new THREE.SphereGeometry(RAGGIO_SFERA, 24, 24);
+const sferaMaterial = new THREE.MeshPhongMaterial({
+    color: 0x4B0082,
+    emissive: 0x200030,
+    emissiveIntensity: 0.2,
+    shininess: 100
+});
+
+class SferaDinamica {
+    constructor(sciame) {
+        this.sciame = sciame;
+        this.id = Math.floor(Math.random() * 10000);
+        
+        const posizioneIniziale = new THREE.Vector3(
+            (Math.random() - 0.5) * RAGGIO_SCIAME * 0.9,
+            (Math.random() - 0.5) * RAGGIO_SCIAME * 0.9,
+            (Math.random() - 0.5) * RAGGIO_SCIAME * 0.9
+        );
+        
+        this.mesh = new THREE.Mesh(sferaGeometry, sferaMaterial.clone());
+        this.mesh.castShadow = USE_SHADOWS;
+        this.mesh.receiveShadow = USE_SHADOWS;
+        
+        // Varia leggermente il colore di ogni sfera
+        const hue = 0.75 + Math.random() * 0.1; // Viola-blu
+        const saturation = 0.7 + Math.random() * 0.3;
+        const lightness = 0.4 + Math.random() * 0.2;
+        this.mesh.material.color.setHSL(hue, saturation, lightness);
+        this.mesh.material.emissive.setHSL(hue, saturation, lightness * 0.3);
+        
+        this.mesh.position.copy(this.sciame.position).add(posizioneIniziale);
+        this.posizioneRelativa = posizioneIniziale.clone();
+        
+        this.velocitaInterna = new THREE.Vector3(
+            (Math.random() - 0.5) * VELOCITA_SFERE,
+            (Math.random() - 0.5) * VELOCITA_SFERE,
+            (Math.random() - 0.5) * VELOCITA_SFERE
+        );
+        
+        this.noiseOffset = Math.random() * 1000;
+        this.noiseScale = 0.5 + Math.random() * 0.5;
+        
+        this.particleSystem = new ParticleSystem(this.mesh.position, this.id);
+        
+        scene.add(this.mesh);
+    }
+
+    update(time) {
+        this.velocitaInterna.x += Math.sin(time * 0.7 + this.noiseOffset) * 0.01 * this.noiseScale;
+        this.velocitaInterna.y += Math.cos(time * 0.8 + this.noiseOffset) * 0.01 * this.noiseScale;
+        this.velocitaInterna.z += Math.sin(time * 0.9 + this.noiseOffset) * 0.01 * this.noiseScale;
+        
+        this.velocitaInterna.multiplyScalar(0.98);
+        this.posizioneRelativa.add(this.velocitaInterna);
+        
+        const distanzaDalCentro = this.posizioneRelativa.length();
+        if (distanzaDalCentro > RAGGIO_SCIAME * 0.9) {
+            const forza = (distanzaDalCentro - RAGGIO_SCIAME * 0.9) * 0.05;
+            const direzioneVersoIlCentro = this.posizioneRelativa.clone().normalize().negate();
+            
+            this.velocitaInterna.add(direzioneVersoIlCentro.multiplyScalar(forza));
+            this.posizioneRelativa.normalize().multiplyScalar(RAGGIO_SCIAME * 0.9);
+        }
+        
+        this.mesh.position.copy(this.sciame.position).add(this.posizioneRelativa);
+        this.particleSystem.update(time, this.mesh.position);
+    }
+}
+
+// Inizializzazione
+const noiseSurface = new NoiseSurface();
+const sciame = new Sciame();
+
+// Funzione per rigenerare sfere nello sciame
+function regenerateSfere() {
+    // Controlla se lo sciame ha bisogno di più sfere
+    while (sciame.sfere.length < NUM_SFERE_SCIAME) {
+        sciame.addSfera();
+    }
+}
+
+// Animazione
+camera.position.set(0, 200, 400);
+const clock = new THREE.Clock();
+const stats = new Stats();
+document.body.appendChild(stats.dom);
+
+let lastFrameTime = 0;
+const frameInterval = 3000 / TARGET_FPS; // Intervallo per 120 FPS
+let lastRegenerateTime = 0;
+
+function animate(currentTime) {
+    requestAnimationFrame(animate);
+    
+    const elapsed = currentTime - lastFrameTime;
+    if (elapsed < frameInterval) return;
+    
+    lastFrameTime = currentTime - (elapsed % frameInterval);
+    
+    const time = clock.getElapsedTime();
+    
+    // Aggiorna lo sciame e la superficie
+    sciame.update(time, noiseSurface);
+    noiseSurface.update(time, sciame.position);
+    
+    // Rigenera sfere nello sciame periodicamente
+    if (time - lastRegenerateTime > 2) {
+        lastRegenerateTime = time;
+        regenerateSfere();
+    }
+    
+    controls.update();
+    renderer.render(scene, camera);
+    
+    stats.update();
+    document.getElementById('fps').textContent = Math.round(stats.fps);
+}
+
+animate(0);
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+//mannaggia la madonna mo devi funzionare porcodffddffdS
+</script>
+</body>
+</html>
