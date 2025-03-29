@@ -1,45 +1,407 @@
-<style>
-    /* VERSIONE CORRETTA - ZOOM CENTRATO */
-    .zuppa-card {
-        border-radius: 15px;
-        box-shadow: 0 6px 15px rgba(0,0,0,0.1);
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
-        overflow: hidden;
-        height: 100%;
-        border-top: 4px solid;
-        position: relative; /* Aggiunto */
-        transform-origin: center center; /* Fondamentale per zoom centrato */
-        will-change: transform; /* Ottimizzazione */
-        margin: 15px 0; /* Spazio per lo zoom */
-    }
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Framework Z.U.P.P.A. - Visualizzazione</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .zuppa-card {
+            border-radius: 15px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+            overflow: hidden;
+            height: 100%;
+            border-top: 4px solid;
+            transform: translateY(0);
+            z-index: 1;
+        }
+        
+        /* Versione ottimizzata per Z.U.P.P.A. cards */
+.zuppa-card {
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                box-shadow 0.3s ease,
+                z-index 0.3s step-end; /* Mantiene z-index alto durante l'animazione */
+    transform-origin: center; /* Zoom centrato */
+    will-change: transform; /* Ottimizzazione prestazioni */
+}
 
-    /* EFFETTO HOVER CORRETTO */
-    .zuppa-card:hover {
-        transform: scale(1.3); /* Solo zoom, senza translateY */
-        box-shadow: 0 15px 30px rgba(0,0,0,0.2);
-        z-index: 100;
-    }
+.zuppa-card:hover {
+    transform: scale(1.2) translateY(-8px); /* Zoom più moderato (15%) */
+    box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+    z-index: 100; /* Valore più alto per sovrapposizione sicura */
+}
 
-    /* CONTENITORE PRINCIPALE - ESSENZIALE */
-    .zuppa-container {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center; /* Centra le card */
-    }
+/* Contenitore per evitare overflow */
+.zuppa-card-container {
+    margin: 15px 0; /* Spazio extra per lo zoom */
+    padding: 5px; /* Compensa lo zoom */
+}
 
-    /* CONTENUTO INTERNO */
-    .zuppa-card-content {
-        transition: all 0.3s ease;
-        height: 100%;
-    }
+/* Contenuto interno - evita distorsioni */
+.zuppa-card-content {
+    transition: all 0.3s ease;
+}
 
-    /* Mantieni tutto il resto del tuo CSS esistente */
-    .z-z { border-top-color: #3a86ff; }
-    .z-u { border-top-color: #4cc9f0; }
-    .z-p1 { border-top-color: #f72585; }
-    .z-p2 { border-top-color: #7209b7; }
-    .z-a { border-top-color: #4895ef; }
-    .math-formula { /* ... mantieni stile esistente ... */ }
-    .tech-badge { /* ... mantieni stile esistente ... */ }
-    /* ... altri stili esistenti ... */
-</style>
+.zuppa-card:hover .zuppa-card-content {
+    transform: scale(0.95); /* Contro-bilancia lo zoom esterno */
+}
+        
+        /* Transizione fluida per gli elementi interni */
+        .zuppa-card * {
+            transition: all 0.3s ease;
+        }
+        
+        /* Leggera trasparenza per le carte non in hover */
+        .zuppa-container:hover .zuppa-card:not(:hover) {
+            opacity: 0.85;
+        }
+        
+        /* Colori delle carte */
+        .z-z { border-top-color: #3a86ff; }
+        .z-u { border-top-color: #4cc9f0; }
+        .z-p1 { border-top-color: #f72585; }
+        .z-p2 { border-top-color: #7209b7; }
+        .z-a { border-top-color: #4895ef; }
+        
+        .math-formula {
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+        }
+        
+        .tech-badge {
+            background-color: #f1f1f1;
+            color: #333;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+        
+        .zuppa-card:hover .tech-badge {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .legend-box {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            margin-right: 8px;
+            vertical-align: middle;
+            transition: all 0.3s;
+        }
+        
+        .zuppa-card:hover .legend-box {
+            transform: scale(1.2);
+        }
+        
+        #perceptionChart {
+            max-height: 400px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="text-center mb-5">
+            <h1 class="display-4 fw-bold">Framework Z.U.P.P.A.</h1>
+            <p class="lead text-muted">Modello di calibrazione neuroscientifica avanzata</p>
+        </div>
+
+        <!-- Sezione Grafico Principale -->
+        <div class="row mb-5">
+            <div class="col-lg-8 mx-auto">
+                <div class="card zuppa-card z-z">
+                    <div class="card-header bg-white">
+                        <h3 class="h5">Mappatura Percettiva Multidimensionale</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="perceptionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sezioni Componenti - Contenitore principale -->
+        <div class="row g-4 zuppa-container">
+            <!-- Z -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card zuppa-card h-100 z-z">
+                    <div class="card-header text-white" style="background-color: #3a86ff;">
+                        <h4 class="h6 mb-0">Z (Zealously)</h4>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">Calibrazione di Precisione</h5>
+                        <p class="text-muted">Rigore metodologico con errore &lt; 2% nella calibrazione dei parametri neurali</p>
+                        
+                        <div class="math-formula">
+                            β = 0.28 ± 0.03 (95% CI)<br>
+                            R² = 0.94
+                        </div>
+                        
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="legend-box" style="background-color: #3a86ff;"></div>
+                            <span>Calibrazione parametri</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar" role="progressbar" style="width: 98%; background-color: #3a86ff;"></div>
+                        </div>
+                        
+                        <div class="d-flex align-items-center mt-3 mb-2">
+                            <div class="legend-box" style="background-color: #2a6fd6;"></div>
+                            <span>Convergenza algoritmica</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar" role="progressbar" style="width: 95%; background-color: #2a6fd6;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- U -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card zuppa-card h-100 z-u">
+                    <div class="card-header text-white" style="background-color: #4cc9f0;">
+                        <h4 class="h6 mb-0">U (Unified)</h4>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">Integrazione Cross-Modale</h5>
+                        <p class="text-muted">Sintesi di geometria differenziale, EEG/fMRI e psicoacustica</p>
+                        
+                        <div class="math-formula">
+                            H³ ↔ Attivazione STG<br>
+                            R² = 0.93
+                        </div>
+                        
+                        <canvas id="integrationChart" height="180"></canvas>
+                        
+                        <div class="mt-3">
+                            <span class="tech-badge">Trasformata wavelet</span>
+                            <span class="tech-badge">Coerenza fase-gamma</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P1 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card zuppa-card h-100 z-p1">
+                    <div class="card-header text-white" style="background-color: #f72585;">
+                        <h4 class="h6 mb-0">P (Physicoacoustic)</h4>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">Propagazione Non-Lineare</h5>
+                        <p class="text-muted">Modelli fisici di propagazione in mezzi neurali</p>
+                        
+                        <div class="math-formula">
+                            ∂<sub>t</sub>A = ∫g(f−f′)A(f′)df′
+                        </div>
+                        
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="legend-box" style="background-color: #f72585;"></div>
+                            <div>
+                                <strong>Analisi modale</strong><br>
+                                <small class="text-muted">Risoluzione spettrale delle onde neurali</small>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex align-items-center">
+                            <div class="legend-box" style="background-color: #e5177e;"></div>
+                            <div>
+                                <strong>Teoria perturbativa</strong><br>
+                                <small class="text-muted">Modelli non lineari di interazione</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P2 -->
+            <div class="col-md-6">
+                <div class="card zuppa-card h-100 z-p2">
+                    <div class="card-header text-white" style="background-color: #7209b7;">
+                        <h4 class="h6 mb-0">P (Principles)</h4>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">Teoremi Fondamentali</h5>
+                        <p class="text-muted">Strutture matematiche irriducibili</p>
+                        
+                        <div class="math-formula">
+                            H³ ↪ R¹⁵ (Embedding di Nash)<br>
+                            R<sup>l</sup><sub>ijk</sub> = ∂Γ<sup>l</sup><sub>ik</sub>/∂xʲ - ...
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-6 mb-3">
+                                <div class="d-flex align-items-start">
+                                    <div class="legend-box mt-1" style="background-color: #7209b7;"></div>
+                                    <div>
+                                        <strong>Gruppi di omotopia</strong><br>
+                                        <small class="text-muted">Classificazione topologica delle traiettorie percettive</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <div class="d-flex align-items-start">
+                                    <div class="legend-box mt-1" style="background-color: #b5179e;"></div>
+                                    <div>
+                                        <strong>Tensore di Riemann</strong><br>
+                                        <small class="text-muted">Curvatura dello spazio percettivo</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- A -->
+            <div class="col-md-6">
+                <div class="card zuppa-card h-100 z-a">
+                    <div class="card-header text-white" style="background-color: #4895ef;">
+                        <h4 class="h6 mb-0">A (Architecture)</h4>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">Struttura Gerarchica</h5>
+                        <p class="text-muted">Architettura a 3 livelli di elaborazione</p>
+                        
+                        <div class="mt-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <div>
+                                    <strong>Layer 1:</strong> Varietà base M³
+                                </div>
+                                <span>92%</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar" role="progressbar" style="width: 92%; background-color: #4895ef;"></div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mb-1 mt-3">
+                                <div>
+                                    <strong>Layer 2:</strong> Connessioni Γ<sup>k</sup><sub>ij</sub>
+                                </div>
+                                <span>87%</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar" role="progressbar" style="width: 87%; background-color: #4895ef;"></div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mb-1 mt-3">
+                                <div>
+                                    <strong>Layer 3:</strong> Dinamiche ψ(f,θ,t)
+                                </div>
+                                <span>78%</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar" role="progressbar" style="width: 78%; background-color: #4895ef;"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <span class="tech-badge">PDE geometriche</span>
+                            <span class="tech-badge">Analisi spettrale</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Grafico principale
+        const ctx = document.getElementById('perceptionChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Localizzazione', 'Intensità', 'Timbro', 'Frequenza', 'Durata', 'Banda critica'],
+                datasets: [{
+                    label: 'Risposta neurale',
+                    data: [95, 82, 78, 91, 85, 88],
+                    backgroundColor: 'rgba(58, 134, 255, 0.2)',
+                    borderColor: 'rgba(58, 134, 255, 1)',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#3a86ff'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    r: {
+                        angleLines: { display: true },
+                        suggestedMin: 0,
+                        suggestedMax: 100,
+                        ticks: { stepSize: 20 }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.raw + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Grafico integrazione
+        const ctx2 = document.getElementById('integrationChart').getContext('2d');
+        new Chart(ctx2, {
+            type: 'line',
+            data: {
+                labels: ['Coclea', 'Nucleo Cocleare', 'Collicolo Inferiore', 'Corpo Genicolato', 'Corteccia A1', 'Aree Associative'],
+                datasets: [{
+                    label: 'Attivazione',
+                    data: [20, 45, 75, 90, 82, 95],
+                    borderColor: '#4cc9f0',
+                    backgroundColor: 'rgba(76, 201, 240, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { 
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'Attivazione: ' + context.raw + '%';
+                            }
+                        }
+                    }
+                },
+                scales: { 
+                    y: { 
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            font: {
+                                size: 10
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
