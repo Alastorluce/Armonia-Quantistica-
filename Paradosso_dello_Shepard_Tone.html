@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Shepard Tone - Visualizzazione Z.U.P.P.A.</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background-color: #000000;
+        }
+        #menu-btn {
+            position: absolute;
+            top: 80px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: 1px solid #00ffff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+        #controls-panel {
+            position: absolute;
+            top: 130px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            width: 250px;
+            backdrop-filter: blur(5px);
+            pointer-events: all;
+            transform: translateX(-120%);
+            transition: transform 0.3s ease;
+            z-index: 99;
+            border: 1px solid rgba(0,255,255,0.3);
+        }
+        #controls-panel.visible {
+            transform: translateX(0);
+        }
+        .slider-container {
+            margin: 15px 0;
+        }
+        h2 {
+            margin-top: 0;
+            color: #00ffff;
+            font-size: 18px;
+            border-bottom: 1px solid #00ffff;
+            padding-bottom: 5px;
+        }
+        .param-value {
+            float: right;
+            font-family: monospace;
+            color: #00ff88;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        input[type="range"] {
+            width: 100%;
+            background: rgba(0,255,255,0.2);
+            height: 4px;
+            border-radius: 2px;
+        }
+        button {
+            background: rgba(0,255,255,0.2);
+            color: white;
+            border: 1px solid #00ffff;
+            border-radius: 4px;
+            padding: 5px 10px;
+            margin-top: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            text-align: left;
+        }
+        button:hover {
+            background: rgba(0,255,255,0.4);
+        }
+        #fps-counter {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: white;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(0,255,255,0.2);
+        }
+        #info-panel {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 500px;
+            color: white;
+            border: 1px solid #00ffff;
+            z-index: 101;
+            backdrop-filter: blur(10px);
+        }
+        #explanation-panel {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 20px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 800px;
+            color: white;
+            border: 1px solid #00ffff;
+            z-index: 101;
+            backdrop-filter: blur(10px);
+            font-size: 14px;
+        }
+        .explanation-text {
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+        .close-btn {
+            background: rgba(0,255,255,0.2);
+            color: white;
+            border: 1px solid #00ffff;
+            border-radius: 4px;
+            padding: 5px 10px;
+            margin-top: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: auto;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .close-btn:hover {
+            background: rgba(0,255,255,0.4);
+        }
+        .explanation-list {
+            margin-top: 10px;
+            padding-left: 20px;
+        }
+        .explanation-list li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="menu-btn">≡</div>
+    
+    <div id="controls-panel">
+        <h2>Parametri Scientifici</h2>
+        
+        <div class="slider-container">
+            <label>Velocità: <span id="speed-value" class="param-value">0.5</span> ott/s</label>
+            <input type="range" id="speed-control" min="0.1" max="2.5" step="0.1" value="0.5">
+        </div>
+        
+        <div class="slider-container">
+            <label>Curvatura: <span id="curvature-value" class="param-value">0.85</span> ||R||</label>
+            <input type="range" id="curvature-control" min="0.1" max="1.5" step="0.05" value="0.85">
+        </div>
+        
+        <div class="slider-container">
+            <label>Ottave: <span id="octaves-value" class="param-value">6</span></label>
+            <input type="range" id="octaves-control" min="3" max="9" step="1" value="6">
+        </div>
+        
+        <button id="reset-btn">Reset Camera</button>
+        <button id="info-btn">Mostra Info Tecniche</button>
+        <button id="explanation-btn">Spiegazione</button>
+    </div>
+
+    <div id="fps-counter">FPS: 0</div>
+
+    <div id="info-panel">
+        <h2 style="margin-top:0;">Modello Z.U.P.P.A.</h2>
+        <p><strong>Z</strong> (Zealously): β = 0.28 ± 0.01 (precisione <2%)</p>
+        <p><strong>U</strong> (Unified): R² = 0.93 (integrazione fMRI/EEG)</p>
+        <p><strong>P</strong> (Physicoacoustic): ∂A/∂t = ∫g(f-f')A(f')df'</p>
+        <p><strong>P</strong> (Principles): ||R|| > 0.8 (teorema di Nash)</p>
+        <p><strong>A</strong> (Architecture): 3-layer neural manifold</p>
+        <button id="close-info" class="close-btn">Chiudi</button>
+    </div>
+
+    <div id="explanation-panel">
+        <h2 style="margin-top:0; color: #00ffff;">Cosa stai vedendo</h2>
+        <div class="explanation-text">
+            <p>Questa rappresentazione mostra come la percezione può essere modellata attraverso un approccio integrato che combina diversi livelli di complessità.</p>
+            
+            <p><strong>Elementi principali:</strong></p>
+            <ul class="explanation-list">
+                <li><strong>La spirale ascendente</strong> mostra il principio di continuità percettiva, dove elementi discreti creano l'illusione di un flusso infinito</li>
+                <li><strong>Le strutture molecolari</strong> rappresentano l'architettura sottostante che permette questa integrazione</li>
+                <li><strong>Le particelle in movimento</strong> illustrano come elementi discreti contribuiscono alla percezione di un tutto unificato</li>
+                <li><strong>I parametri regolabili</strong> ti permettono di esplorare come varia la percezione al cambiare delle condizioni</li>
+            </ul>
+            
+            <p><strong>Cosa rappresenta:</strong></p>
+            <ul class="explanation-list">
+                <li>La <strong>velocità</strong> influenza il tasso di integrazione tra i diversi livelli</li>
+                <li>La <strong>curvatura</strong> mostra quanto il sistema può adattarsi mantenendo coerenza</li>
+                <li>Le <strong>ottave</strong> rappresentano i diversi livelli di risoluzione coinvolti</li>
+            </ul>
+            
+            <p>L'intero sistema dimostra come elementi semplici, organizzati attraverso principi chiari, possano generare percezioni complesse e continue.</p>
+        </div>
+        <button id="close-explanation" class="close-btn">Chiudi</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/stats.min.js"></script>
+
+    <script>
+        // 1. INIZIALIZZAZIONE SCENA
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+        scene.fog = new THREE.FogExp2(0x000000, 0.0008);
+
+        // 2. SETUP CAMERA
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 5000);
+        camera.position.set(0, 150, 400);
+
+        // 3. RENDERER
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // 4. ILLUMINAZIONE
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(100, 200, 100);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+
+        // 5. HELIX PRINCIPALE
+        const helixGeometry = new THREE.BufferGeometry();
+        const helixRadius = 80;
+        const helixHeight = 350;
+        const segments = 500;
+
+        const positions = new Float32Array(segments * 3);
+        const colors = new Float32Array(segments * 3);
+
+        for (let i = 0; i < segments; i++) {
+            const t = i / segments;
+            const angle = t * Math.PI * 6;
+            const radius = helixRadius * (1 + 0.1 * Math.sin(angle * 3));
+            
+            positions[i * 3] = radius * Math.cos(angle);
+            positions[i * 3 + 1] = t * helixHeight - helixHeight/2;
+            positions[i * 3 + 2] = radius * Math.sin(angle);
+            
+            const hue = 0.55 + (t * 2 % 1) * 0.3;
+            const color = new THREE.Color().setHSL(hue, 0.9, 0.5);
+            colors[i * 3] = color.r;
+            colors[i * 3 + 1] = color.g;
+            colors[i * 3 + 2] = color.b;
+        }
+
+        helixGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        helixGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const helixMaterial = new THREE.LineBasicMaterial({ 
+            vertexColors: true,
+            linewidth: 2
+        });
+
+        const helix = new THREE.Line(helixGeometry, helixMaterial);
+        scene.add(helix);
+
+        // 6. TONI PRINCIPALI (SFERE GRANDI)
+        const mainTones = [];
+        const toneGeometry = new THREE.SphereGeometry(6, 32, 32);
+        const numMainTones = 12;
+
+        for (let i = 0; i < numMainTones; i++) {
+            const angle = (i / numMainTones) * Math.PI * 2;
+            const radius = helixRadius * (1 + 0.1 * Math.sin(angle * 3));
+            
+            const toneMaterial = new THREE.MeshStandardMaterial({
+                color: new THREE.Color().setHSL(0.55 + (i / numMainTones) * 0.3, 0.9, 0.5),
+                emissive: new THREE.Color().setHSL(0.55 + (i / numMainTones) * 0.3, 0.7, 0.2),
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            
+            const tone = new THREE.Mesh(toneGeometry, toneMaterial);
+            tone.position.set(
+                radius * Math.cos(angle),
+                -helixHeight/2,
+                radius * Math.sin(angle)
+            );
+            tone.castShadow = true;
+            
+            scene.add(tone);
+            mainTones.push({
+                mesh: tone,
+                baseAngle: angle,
+                octave: 0,
+                baseRadius: radius,
+                currentY: -helixHeight/2
+            });
+        }
+
+        // 7. SFERE PICCOLE
+        const smallTones = [];
+        const smallToneGeometry = new THREE.SphereGeometry(3, 16, 16);
+        const numSmallTones = 36;
+        
+        for (let i = 0; i < numSmallTones; i++) {
+            const t = i / numSmallTones;
+            const yPos = -helixHeight/2 + t * helixHeight;
+            const angle = t * Math.PI * 6;
+            const radius = helixRadius * (1 + 0.1 * Math.sin(angle * 3));
+            
+            const smallTone = new THREE.Mesh(
+                smallToneGeometry,
+                new THREE.MeshStandardMaterial({
+                    color: new THREE.Color().setHSL(0.55 + t * 0.3, 0.9, 0.6),
+                    emissive: new THREE.Color().setHSL(0.55 + t * 0.3, 0.7, 0.2),
+                    metalness: 0.6,
+                    roughness: 0.3
+                })
+            );
+            
+            smallTone.position.set(
+                radius * Math.cos(angle),
+                yPos,
+                radius * Math.sin(angle)
+            );
+            smallTone.castShadow = true;
+            scene.add(smallTone);
+            smallTones.push({
+                mesh: smallTone,
+                currentY: yPos,
+                angle: angle,
+                radius: radius
+            });
+        }
+
+        // 8. VORTICE INTERNO
+        const fibrati = [];
+        const fibratiGeometry = new THREE.SphereGeometry(1, 8, 8);
+        const numFibrati = 1500;
+
+        for (let i = 0; i < numFibrati; i++) {
+            const radius = helixRadius * 0.7 * (0.8 + Math.random() * 0.2);
+            const angle = Math.random() * Math.PI * 2;
+            const height = helixHeight * (Math.random() - 0.5);
+            const isChaotic = Math.random() < 0.3;
+            
+            const fibrato = new THREE.Mesh(
+                fibratiGeometry,
+                new THREE.MeshStandardMaterial({
+                    color: new THREE.Color().setHSL(0.15 + Math.random() * 0.2, 0.9, 0.7),
+                    emissive: new THREE.Color().setHSL(0.15 + Math.random() * 0.2, 0.6, 0.2),
+                    metalness: 0.3,
+                    roughness: 0.7,
+                    transparent: true,
+                    opacity: 0.7
+                })
+            );
+            
+            fibrato.position.set(
+                radius * Math.cos(angle),
+                height,
+                radius * Math.sin(angle)
+            );
+            fibrato.castShadow = true;
+            scene.add(fibrato);
+            
+            fibrati.push({
+                mesh: fibrato,
+                baseRadius: radius,
+                baseHeight: height,
+                currentHeight: height,
+                verticalSpeed: 0.3 + Math.random() * 0.7,
+                rotationSpeed: (1.5 + Math.random() * 1.0) * -1,
+                angle: angle,
+                currentAngle: angle,
+                radiusVariation: Math.random() * 0.1,
+                radiusVariationSpeed: 0.5 + Math.random(),
+                isChaotic: isChaotic,
+                chaosFactor: isChaotic ? 0.5 + Math.random() * 0.5 : 0
+            });
+        }
+
+        // 9. SCIE PER PARTICELlE CAOTICHE
+        const trails = [];
+        const trailMaterial = new THREE.LineBasicMaterial({
+            transparent: true,
+            opacity: 0.7,
+            linewidth: 1
+        });
+
+        fibrati.forEach((fibrato, index) => {
+            if (fibrato.isChaotic) {
+                const trailGeometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(20 * 3);
+                trailGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const trail = new THREE.Line(
+                    trailGeometry,
+                    trailMaterial.clone()
+                );
+                trail.material.color.setHSL(0.6 + Math.random() * 0.3, 0.9, 0.7);
+                scene.add(trail);
+                
+                trails.push({
+                    line: trail,
+                    points: [],
+                    maxPoints: 20,
+                    particleIndex: index
+                });
+            }
+        });
+
+        // 10. STRUTTURE MOLECOLARI/PROTEICHE
+        const molecules = [];
+        const atomColors = {
+            'C': 0x888888,
+            'O': 0xFF0000,
+            'N': 0x0000FF,
+            'H': 0xFFFFFF,
+            'S': 0xFFFF00
+        };
+
+        const atomSizes = {
+            'C': 1.7,
+            'O': 1.5,
+            'N': 1.6,
+            'H': 1.2,
+            'S': 1.8
+        };
+
+        function createMolecule() {
+            const group = new THREE.Group();
+            const numAtoms = 5 + Math.floor(Math.random() * 10);
+            const atoms = [];
+            const bonds = [];
+            
+            const atomTypes = ['C', 'O', 'N', 'H', 'S'];
+            
+            for (let i = 0; i < numAtoms; i++) {
+                const type = atomTypes[Math.floor(Math.random() * atomTypes.length)];
+                const size = atomSizes[type];
+                const color = atomColors[type];
+                
+                const geometry = new THREE.SphereGeometry(size, 16, 16);
+                const material = new THREE.MeshPhongMaterial({ 
+                    color: color,
+                    specular: 0x111111,
+                    shininess: 30,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                
+                const atom = new THREE.Mesh(geometry, material);
+                
+                atom.position.set(
+                    (Math.random() - 0.5) * 15,
+                    (Math.random() - 0.5) * 15,
+                    (Math.random() - 0.5) * 15
+                );
+                
+                group.add(atom);
+                atoms.push({
+                    mesh: atom,
+                    type: type,
+                    position: atom.position.clone(),
+                    targetPosition: atom.position.clone(),
+                    connections: 0
+                });
+            }
+            
+            for (let i = 0; i < atoms.length; i++) {
+                const maxBonds = Math.min(3, atoms[i].type === 'C' ? 4 : 2);
+                const desiredBonds = 1 + Math.floor(Math.random() * (maxBonds - 1));
+                
+                while (atoms[i].connections < desiredBonds) {
+                    let bestCandidate = -1;
+                    let bestDistance = Infinity;
+                    
+                    for (let j = 0; j < atoms.length; j++) {
+                        if (i === j || atoms[j].connections >= (atoms[j].type === 'C' ? 4 : 2)) continue;
+                        
+                        const distance = atoms[i].position.distanceTo(atoms[j].position);
+                        if (distance < bestDistance) {
+                            bestDistance = distance;
+                            bestCandidate = j;
+                        }
+                    }
+                    
+                    if (bestCandidate !== -1) {
+                        const bondGeometry = new THREE.CylinderGeometry(0.3, 0.3, bestDistance, 8);
+                        bondGeometry.translate(0, bestDistance/2, 0);
+                        bondGeometry.rotateX(Math.PI/2);
+                        
+                        const bondMaterial = new THREE.MeshPhongMaterial({
+                            color: 0xAAAAAA,
+                            specular: 0x111111,
+                            shininess: 30,
+                            transparent: true,
+                            opacity: 0.7
+                        });
+                        
+                        const bond = new THREE.Mesh(bondGeometry, bondMaterial);
+                        
+                        const start = atoms[i].position;
+                        const end = atoms[bestCandidate].position;
+                        const center = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+                        
+                        bond.position.copy(center);
+                        bond.lookAt(end);
+                        
+                        group.add(bond);
+                        bonds.push(bond);
+                        
+                        atoms[i].connections++;
+                        atoms[bestCandidate].connections++;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            
+            return {
+                group: group,
+                atoms: atoms,
+                bonds: bonds,
+                rotationSpeed: new THREE.Vector3(
+                    Math.random() * 0.02 - 0.01,
+                    Math.random() * 0.02 - 0.01,
+                    Math.random() * 0.02 - 0.01
+                ),
+                pulseSpeed: 0.5 + Math.random() * 0.5,
+                baseScale: 0.5 + Math.random() * 0.5,
+                targetParticleIndex: Math.floor(Math.random() * numFibrati),
+                currentPosition: new THREE.Vector3(),
+                targetPosition: new THREE.Vector3(),
+                age: 0,
+                maxAge: 10 + Math.random() * 20
+            };
+        }
+
+        for (let i = 0; i < 5; i++) {
+            const molecule = createMolecule();
+            molecule.group.visible = false;
+            scene.add(molecule.group);
+            molecules.push(molecule);
+        }
+
+        // 11. CONTROLLI UI
+        const params = {
+            speed: 0.5,
+            curvature: 0.85,
+            octaves: 6,
+            illusionActive: true
+        };
+
+        document.getElementById('menu-btn').addEventListener('click', () => {
+            document.getElementById('controls-panel').classList.toggle('visible');
+        });
+
+        document.getElementById('speed-control').addEventListener('input', (e) => {
+            params.speed = parseFloat(e.target.value);
+            document.getElementById('speed-value').textContent = params.speed.toFixed(1);
+        });
+
+        document.getElementById('curvature-control').addEventListener('input', (e) => {
+            params.curvature = parseFloat(e.target.value);
+            document.getElementById('curvature-value').textContent = params.curvature.toFixed(2);
+            params.illusionActive = params.curvature > 0.8;
+        });
+
+        document.getElementById('octaves-control').addEventListener('input', (e) => {
+            params.octaves = parseInt(e.target.value);
+            document.getElementById('octaves-value').textContent = params.octaves;
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            camera.position.set(0, 150, 400);
+            camera.lookAt(0, 0, 0);
+        });
+
+        document.getElementById('info-btn').addEventListener('click', () => {
+            document.getElementById('info-panel').style.display = 'block';
+        });
+
+        document.getElementById('explanation-btn').addEventListener('click', () => {
+            document.getElementById('explanation-panel').style.display = 'block';
+        });
+
+        document.getElementById('close-info').addEventListener('click', () => {
+            document.getElementById('info-panel').style.display = 'none';
+        });
+
+        document.getElementById('close-explanation').addEventListener('click', () => {
+            document.getElementById('explanation-panel').style.display = 'none';
+        });
+
+        // 12. ANIMAZIONE
+        const clock = new THREE.Clock();
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.1;
+        
+        const stats = new Stats();
+        document.body.appendChild(stats.dom);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+            
+            // Animazione toni principali
+            mainTones.forEach((tone, i) => {
+                const speed = params.speed * 50;
+                tone.currentY += speed * delta;
+                
+                if (tone.currentY > helixHeight/2) {
+                    tone.currentY = -helixHeight/2;
+                    tone.octave = (tone.octave + 1) % params.octaves;
+                    
+                    const hue = 0.55 + (i / numMainTones) * 0.3;
+                    const lightness = 0.3 + tone.octave * 0.15;
+                    tone.mesh.material.color.setHSL(hue, 0.9, lightness);
+                    tone.mesh.material.emissive.setHSL(hue, 0.7, lightness * 0.5);
+                }
+                
+                tone.mesh.position.y = tone.currentY;
+                
+                const angle = tone.baseAngle + time * 0.5;
+                const radius = tone.baseRadius * (1 + 0.1 * Math.sin(angle * 3 + time * 2));
+                tone.mesh.position.x = radius * Math.cos(tone.baseAngle);
+                tone.mesh.position.z = radius * Math.sin(tone.baseAngle);
+                
+                const pulse = params.illusionActive ? 
+                    Math.sin(time * 3 + i) * 0.5 + 1.5 : 1.0;
+                tone.mesh.scale.setScalar(pulse);
+            });
+            
+            // Animazione sfere piccole
+            smallTones.forEach(smallTone => {
+                smallTone.currentY += params.speed * 50 * delta;
+                
+                if (smallTone.currentY > helixHeight/2) {
+                    smallTone.currentY = -helixHeight/2;
+                }
+                
+                smallTone.mesh.position.y = smallTone.currentY;
+                
+                const t = (smallTone.currentY + helixHeight/2) / helixHeight;
+                const angle = t * Math.PI * 6;
+                const radius = helixRadius * (1 + 0.1 * Math.sin(angle * 3));
+                
+                smallTone.mesh.position.x = radius * Math.cos(angle);
+                smallTone.mesh.position.z = radius * Math.sin(angle);
+            });
+            
+            // Animazione vortice interno
+            fibrati.forEach((fibrato, index) => {
+                fibrato.baseHeight += fibrato.verticalSpeed * delta * params.speed;
+                
+                if (fibrato.baseHeight > helixHeight/2) {
+                    fibrato.baseHeight = -helixHeight/2;
+                }
+                
+                fibrato.currentHeight = fibrato.baseHeight;
+                
+                if (fibrato.isChaotic) {
+                    fibrato.angle += (Math.random() - 0.5) * 0.2 * fibrato.chaosFactor;
+                    
+                    if (Math.random() < 0.02) {
+                        fibrato.angle += (Math.random() - 0.5) * 0.5 * fibrato.chaosFactor;
+                        fibrato.baseHeight += (Math.random() - 0.5) * 2 * fibrato.chaosFactor;
+                    }
+                }
+                
+                fibrato.currentAngle = fibrato.angle;
+                
+                const radiusVariation = Math.sin(time * fibrato.radiusVariationSpeed) * fibrato.radiusVariation;
+                const currentRadius = fibrato.baseRadius * (1 + radiusVariation);
+                
+                fibrato.mesh.position.set(
+                    currentRadius * Math.cos(fibrato.currentAngle),
+                    fibrato.currentHeight,
+                    currentRadius * Math.sin(fibrato.currentAngle)
+                );
+                
+                fibrato.mesh.scale.setScalar(0.6 + Math.sin(time * 3 + fibrato.currentHeight) * 0.2);
+            });
+            
+            // Aggiorna le scie
+            trails.forEach(trail => {
+                const fibrato = fibrati[trail.particleIndex];
+                trail.points.unshift(fibrato.mesh.position.clone());
+                
+                if (trail.points.length > trail.maxPoints) {
+                    trail.points.pop();
+                }
+                
+                const positions = new Float32Array(trail.points.length * 3);
+                trail.points.forEach((point, i) => {
+                    positions[i * 3] = point.x;
+                    positions[i * 3 + 1] = point.y;
+                    positions[i * 3 + 2] = point.z;
+                    
+                    const alpha = 1 - (i / trail.points.length);
+                    if (i === 0) {
+                        trail.line.material.opacity = alpha * 0.7;
+                    }
+                });
+                
+                trail.line.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                trail.line.geometry.attributes.position.needsUpdate = true;
+            });
+            
+            // Animazione molecole
+            molecules.forEach(molecule => {
+                molecule.age += delta;
+                
+                if (molecule.age > molecule.maxAge) {
+                    scene.remove(molecule.group);
+                    const newMolecule = createMolecule();
+                    newMolecule.group.visible = false;
+                    scene.add(newMolecule.group);
+                    
+                    molecules[molecules.indexOf(molecule)] = newMolecule;
+                    return;
+                }
+                
+                const targetParticle = fibrati[molecule.targetParticleIndex];
+                
+                if (targetParticle) {
+                    molecule.targetPosition.copy(targetParticle.mesh.position);
+                    molecule.currentPosition.lerp(molecule.targetPosition, 0.05);
+                    
+                    molecule.group.position.copy(molecule.currentPosition);
+                    molecule.group.visible = true;
+                    
+                    molecule.group.rotation.x += molecule.rotationSpeed.x;
+                    molecule.group.rotation.y += molecule.rotationSpeed.y;
+                    molecule.group.rotation.z += molecule.rotationSpeed.z;
+                    
+                    const pulse = Math.sin(time * molecule.pulseSpeed) * 0.1 + 1.0;
+                    molecule.group.scale.set(
+                        molecule.baseScale * pulse,
+                        molecule.baseScale * pulse,
+                        molecule.baseScale * pulse
+                    );
+                    
+                    const ageRatio = molecule.age / molecule.maxAge;
+                    molecule.group.children.forEach(child => {
+                        if (child.material && child.material.color) {
+                            const originalColor = new THREE.Color(child.material.color);
+                            const hue = (originalColor.getHSL().h + ageRatio * 0.1) % 1.0;
+                            child.material.color.setHSL(hue, 0.9, 0.5);
+                        }
+                    });
+                }
+            });
+            
+            controls.update();
+            renderer.render(scene, camera);
+            
+            document.getElementById('fps-counter').textContent = `FPS: ${Math.round(stats.fps)}`;
+            stats.update();
+        }
+
+        animate();
+
+        // 13. GESTIONE RESIZE
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
