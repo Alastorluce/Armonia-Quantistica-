@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Shepard Tone - Visualizzazione Z.U.P.P.A.</title>
+    <title>Shepard Tone - Visualizzazione Z.U.P.P.A. Avanzata</title>
     <style>
         body { 
             margin: 0; 
@@ -131,6 +131,34 @@
             backdrop-filter: blur(10px);
             font-size: 14px;
         }
+        #educational-panel {
+            display: none;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 10px;
+            width: 300px;
+            color: white;
+            border: 1px solid #00ffff;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+        #data-export-panel {
+            display: none;
+            position: absolute;
+            bottom: 60px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 10px;
+            width: 300px;
+            color: white;
+            border: 1px solid #00ffff;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
         .explanation-text {
             line-height: 1.5;
             margin-bottom: 15px;
@@ -159,6 +187,54 @@
         .explanation-list li {
             margin-bottom: 8px;
         }
+        .math-equation {
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            background: rgba(0,255,255,0.1);
+            padding: 5px;
+            border-radius: 3px;
+            margin: 10px 0;
+            display: inline-block;
+        }
+        .tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            border: 1px solid #00ffff;
+            display: none;
+        }
+        #eeg-graph {
+            width: 100%;
+            height: 150px;
+            margin-top: 10px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(0,255,255,0.2);
+        }
+        #export-content {
+            font-family: monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        .educational-annotation {
+            position: absolute;
+            color: #00ff88;
+            font-size: 12px;
+            background: rgba(0,0,0,0.5);
+            padding: 5px;
+            border-radius: 3px;
+            border-left: 2px solid #00ffff;
+            pointer-events: none;
+            z-index: 50;
+        }
     </style>
 </head>
 <body>
@@ -183,19 +259,27 @@
         </div>
         
         <button id="reset-btn">Reset Camera</button>
+        <button id="educational-btn">Modalità Educativa</button>
         <button id="info-btn">Mostra Info Tecniche</button>
         <button id="explanation-btn">Spiegazione</button>
+        <button id="export-btn">Esporta Parametri</button>
     </div>
 
     <div id="fps-counter">FPS: 0</div>
 
     <div id="info-panel">
-        <h2 style="margin-top:0;">Modello Z.U.P.P.A.</h2>
+        <h2 style="margin-top:0;">Modello Z.U.P.P.A. - Formalismo Matematico</h2>
         <p><strong>Z</strong> (Zealously): β = 0.28 ± 0.01 (precisione <2%)</p>
         <p><strong>U</strong> (Unified): R² = 0.93 (integrazione fMRI/EEG)</p>
         <p><strong>P</strong> (Physicoacoustic): ∂A/∂t = ∫g(f-f')A(f')df'</p>
         <p><strong>P</strong> (Principles): ||R|| > 0.8 (teorema di Nash)</p>
         <p><strong>A</strong> (Architecture): 3-layer neural manifold</p>
+        
+        <div class="math-equation">ℳ³ = ℝ × S¹ × ℤₙ (Varietà percettiva)</div>
+        <div class="math-equation">∇ₜψ = v ∂ₓψ (Equazione del trasporto)</div>
+        <div class="math-equation">Tⁱⱼₖ = Γⁱⱼₖ - Γⁱₖⱼ (Tensore di torsione)</div>
+        
+        <div id="eeg-graph"></div>
         <button id="close-info" class="close-btn">Chiudi</button>
     </div>
 
@@ -224,9 +308,28 @@
         <button id="close-explanation" class="close-btn">Chiudi</button>
     </div>
 
+    <div id="educational-panel">
+        <h2 style="margin-top:0; color: #00ffff;">Modalità Educativa</h2>
+        <div class="explanation-text">
+            <p>Attiva/disattiva le annotazioni educative nella scena per comprendere meglio i concetti scientifici rappresentati.</p>
+            <button id="toggle-annotations" class="close-btn">Attiva Annotazioni</button>
+        </div>
+        <button id="close-educational" class="close-btn">Chiudi</button>
+    </div>
+
+    <div id="data-export-panel">
+        <h2 style="margin-top:0; color: #00ffff;">Esporta Parametri</h2>
+        <div id="export-content"></div>
+        <button id="copy-export" class="close-btn">Copia negli Appunti</button>
+        <button id="close-export" class="close-btn">Chiudi</button>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/stats.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
         // 1. INIZIALIZZAZIONE SCENA
@@ -368,10 +471,10 @@
             });
         }
 
-        // 8. VORTICE INTERNO CON SCIE (RIPRISTINATO)
+        // 8. VORTICE INTERNO CON SCIE
         const fibrati = [];
         const fibratiGeometry = new THREE.SphereGeometry(1, 8, 8);
-        const numFibrati = 1500; // Ripristinato il numero originale
+        const numFibrati = 1500;
 
         for (let i = 0; i < numFibrati; i++) {
             const radius = helixRadius * 0.7 * (0.8 + Math.random() * 0.2);
@@ -415,7 +518,7 @@
             });
         }
 
-        // 9. SCIE PER PARTICELlE CAOTICHE (RIPRISTINATO)
+        // 9. SCIE PER PARTICELlE CAOTICHE
         const trails = [];
         const trailMaterial = new THREE.LineBasicMaterial({
             transparent: true,
@@ -580,14 +683,56 @@
             molecules.push(molecule);
         }
 
-        // 11. CONTROLLI UI
+        // 11. CONTROLLI UI E INTERAZIONI
         const params = {
             speed: 0.5,
             curvature: 0.85,
             octaves: 6,
-            illusionActive: true
+            illusionActive: true,
+            educationalMode: false,
+            annotations: []
         };
 
+        // Setup EEG Graph
+        const eegCanvas = document.createElement('canvas');
+        eegCanvas.id = 'eeg-canvas';
+        document.getElementById('eeg-graph').appendChild(eegCanvas);
+        
+        const eegCtx = eegCanvas.getContext('2d');
+        eegCanvas.width = document.getElementById('eeg-graph').clientWidth;
+        eegCanvas.height = document.getElementById('eeg-graph').clientHeight;
+        
+        const eegChart = new Chart(eegCtx, {
+            type: 'line',
+            data: {
+                labels: Array(100).fill(''),
+                datasets: [{
+                    label: 'EEG Simulato (40Hz)',
+                    borderColor: '#00ffff',
+                    borderWidth: 1,
+                    pointRadius: 0,
+                    data: Array(100).fill(0)
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { display: false },
+                    y: { 
+                        min: -1,
+                        max: 1,
+                        grid: { color: 'rgba(0, 255, 255, 0.1)' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                },
+                animation: { duration: 0 }
+            }
+        });
+
+        // UI Controls
         document.getElementById('menu-btn').addEventListener('click', () => {
             document.getElementById('controls-panel').classList.toggle('visible');
         });
@@ -601,6 +746,29 @@
             params.curvature = parseFloat(e.target.value);
             document.getElementById('curvature-value').textContent = params.curvature.toFixed(2);
             params.illusionActive = params.curvature > 0.8;
+            
+            // Mostra messaggio se curvatura è critica
+            if (params.curvature < 0.8 && !document.getElementById('curvature-warning')) {
+                const warning = document.createElement('div');
+                warning.id = 'curvature-warning';
+                warning.style.position = 'absolute';
+                warning.style.top = '20px';
+                warning.style.left = '50%';
+                warning.style.transform = 'translateX(-50%)';
+                warning.style.backgroundColor = 'rgba(255,0,0,0.7)';
+                warning.style.color = 'white';
+                warning.style.padding = '10px';
+                warning.style.borderRadius = '5px';
+                warning.style.zIndex = '1000';
+                warning.textContent = 'Soglia di curvatura critica non raggiunta (||R|| < 0.8) - Illusione interrotta';
+                document.body.appendChild(warning);
+                
+                setTimeout(() => {
+                    warning.style.transition = 'opacity 1s';
+                    warning.style.opacity = '0';
+                    setTimeout(() => warning.remove(), 1000);
+                }, 3000);
+            }
         });
 
         document.getElementById('octaves-control').addEventListener('input', (e) => {
@@ -621,12 +789,139 @@
             document.getElementById('explanation-panel').style.display = 'block';
         });
 
+        document.getElementById('educational-btn').addEventListener('click', () => {
+            document.getElementById('educational-panel').style.display = 'block';
+        });
+
+        document.getElementById('export-btn').addEventListener('click', () => {
+            const exportData = {
+                speed: params.speed,
+                curvature: params.curvature,
+                octaves: params.octaves,
+                illusion_strength: params.curvature > 0.8 ? "||R|| > 0.8 → attiva" : "||R|| < 0.8 → disattiva",
+                timestamp: new Date().toISOString(),
+                model_version: "Z.U.P.P.A. v1.2"
+            };
+            
+            document.getElementById('export-content').textContent = JSON.stringify(exportData, null, 2);
+            document.getElementById('data-export-panel').style.display = 'block';
+        });
+
+        document.getElementById('copy-export').addEventListener('click', () => {
+            const content = document.getElementById('export-content').textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                const btn = document.getElementById('copy-export');
+                btn.textContent = 'Copiato!';
+                setTimeout(() => btn.textContent = 'Copia negli Appunti', 2000);
+            });
+        });
+
+        document.getElementById('toggle-annotations').addEventListener('click', function() {
+            params.educationalMode = !params.educationalMode;
+            this.textContent = params.educationalMode ? 'Disattiva Annotazioni' : 'Attiva Annotazioni';
+            
+            // Rimuovi tutte le annotazioni esistenti
+            params.annotations.forEach(ann => ann.remove());
+            params.annotations = [];
+            
+            if (params.educationalMode) {
+                createEducationalAnnotations();
+            }
+        });
+
+        function createEducationalAnnotations() {
+            // Annotazione per la spirale principale
+            const spiralAnn = createAnnotation(
+                "Proiezione su S¹ dello spazio tonale ℳ³ = ℝ × S¹ × ℤₙ",
+                { x: 0, y: helixHeight/2 - 50, z: -helixRadius }
+            );
+            params.annotations.push(spiralAnn);
+            
+            // Annotazione per i toni principali
+            const toneAnn = createAnnotation(
+                "Toni discreti (∇ₜψ = v ∂ₓψ)\nFrequenza: 440Hz + n ottave",
+                mainTones[0].mesh.position
+            );
+            params.annotations.push(toneAnn);
+            
+            // Annotazione per il vortice
+            const vortexAnn = createAnnotation(
+                "Dinamica caotica (Tⁱⱼₖ ≠ 0)\nRappresenta il rumore neurale",
+                { x: helixRadius * 0.7, y: 0, z: 0 }
+            );
+            params.annotations.push(vortexAnn);
+            
+            // Annotazione per le molecole
+            const molAnn = createAnnotation(
+                "Strutture biomolecolari\nBase fisica della percezione",
+                { x: 0, y: -helixHeight/2 + 50, z: helixRadius * 0.5 }
+            );
+            params.annotations.push(molAnn);
+        }
+
+        function createAnnotation(text, worldPos) {
+            const annotation = document.createElement('div');
+            annotation.className = 'educational-annotation';
+            annotation.textContent = text;
+            document.body.appendChild(annotation);
+            
+            // Aggiorna la posizione in base alla posizione 3D
+            function updatePosition() {
+                const vector = new THREE.Vector3(worldPos.x, worldPos.y, worldPos.z);
+                vector.project(camera);
+                
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-(vector.y * 0.5) + 0.5) * window.innerHeight;
+                
+                annotation.style.left = `${x}px`;
+                annotation.style.top = `${y}px`;
+            }
+            
+            updatePosition();
+            return {
+                element: annotation,
+                update: updatePosition,
+                remove: () => annotation.remove()
+            };
+        }
+
         document.getElementById('close-info').addEventListener('click', () => {
             document.getElementById('info-panel').style.display = 'none';
         });
 
         document.getElementById('close-explanation').addEventListener('click', () => {
             document.getElementById('explanation-panel').style.display = 'none';
+        });
+
+        document.getElementById('close-educational').addEventListener('click', () => {
+            document.getElementById('educational-panel').style.display = 'none';
+        });
+
+        document.getElementById('close-export').addEventListener('click', () => {
+            document.getElementById('data-export-panel').style.display = 'none';
+        });
+
+        // Tooltip per i toni
+        const tooltip = document.getElementById('tooltip');
+        mainTones.forEach(tone => {
+            tone.mesh.userData.tooltip = `Tono ${mainTones.indexOf(tone)+1}\nFrequenza: ${(440 * Math.pow(2, tone.octave)).toFixed(1)} Hz\nOttava: ${tone.octave}`;
+            
+            tone.mesh.addEventListener('mouseover', (e) => {
+                if (e.target === tone.mesh) {
+                    const rect = renderer.domElement.getBoundingClientRect();
+                    const x = (e.clientX - rect.left) / rect.width * 2 - 1;
+                    const y = -(e.clientY - rect.top) / rect.height * 2 + 1;
+                    
+                    tooltip.textContent = tone.mesh.userData.tooltip;
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = `${e.clientX + 10}px`;
+                    tooltip.style.top = `${e.clientY + 10}px`;
+                }
+            });
+            
+            tone.mesh.addEventListener('mouseout', () => {
+                tooltip.style.display = 'none';
+            });
         });
 
         // 12. ANIMAZIONE
@@ -646,6 +941,14 @@
             const delta = clock.getDelta();
             const time = clock.getElapsedTime();
             
+            // Aggiorna grafico EEG
+            if (eegChart) {
+                const newData = eegChart.data.datasets[0].data;
+                newData.shift();
+                newData.push(Math.sin(time * 40 * params.speed) * params.curvature);
+                eegChart.update();
+            }
+            
             // Animazione toni principali
             mainTones.forEach((tone, i) => {
                 const speed = params.speed * 50;
@@ -659,6 +962,9 @@
                     const lightness = 0.3 + tone.octave * 0.15;
                     tone.mesh.material.color.setHSL(hue, 0.9, lightness);
                     tone.mesh.material.emissive.setHSL(hue, 0.7, lightness * 0.5);
+                    
+                    // Aggiorna tooltip con nuova ottava
+                    tone.mesh.userData.tooltip = `Tono ${i+1}\nFrequenza: ${(440 * Math.pow(2, tone.octave)).toFixed(1)} Hz\nOttava: ${tone.octave}`;
                 }
                 
                 tone.mesh.position.y = tone.currentY;
@@ -724,7 +1030,7 @@
                 fibrato.mesh.scale.setScalar(0.6 + Math.sin(time * 3 + fibrato.currentHeight) * 0.2);
             });
             
-            // Aggiorna le scie (RIPRISTINATO)
+            // Aggiorna le scie
             trails.forEach(trail => {
                 const fibrato = fibrati[trail.particleIndex];
                 trail.points.unshift(fibrato.mesh.position.clone());
@@ -794,6 +1100,19 @@
                 }
             });
             
+            // Aggiorna annotazioni educative
+            if (params.educationalMode) {
+                params.annotations.forEach(ann => ann.update());
+            }
+            
+            // Effetto collasso se curvatura < 0.8
+            if (!params.illusionActive) {
+                helix.scale.y = THREE.MathUtils.lerp(helix.scale.y, 0.5, 0.01);
+                helix.rotation.z += 0.01;
+            } else {
+                helix.scale.y = THREE.MathUtils.lerp(helix.scale.y, 1.0, 0.05);
+            }
+            
             controls.update();
             renderer.render(scene, camera);
             
@@ -808,6 +1127,12 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            if (eegChart) {
+                eegCanvas.width = document.getElementById('eeg-graph').clientWidth;
+                eegCanvas.height = document.getElementById('eeg-graph').clientHeight;
+                eegChart.update();
+            }
         }
         window.addEventListener('resize', handleResize);
     </script>
